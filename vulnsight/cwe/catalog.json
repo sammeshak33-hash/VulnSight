@@ -1,0 +1,50 @@
+{
+  "CWE-22": {
+    "name": "Path Traversal",
+    "description": "Improper limitation of a pathname to a restricted directory.",
+    "category": "Input Validation",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-78": {
+    "name": "OS Command Injection",
+    "description": "Improper neutralization of special elements used in an operating system command.",
+    "category": "Injection",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-89": {
+    "name": "SQL Injection",
+    "description": "Improper neutralization of special elements used in an SQL command.",
+    "category": "Injection",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-95": {
+    "name": "Eval Injection",
+    "description": "Improper neutralization of directives in dynamically evaluated code.",
+    "category": "Code Injection",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-120": {
+    "name": "Buffer Copy without Checking Size of Input",
+    "description": "Copying a buffer without verifying that the input fits into the destination.",
+    "category": "Memory Safety",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-134": {
+    "name": "Use of Externally-Controlled Format String",
+    "description": "Using an externally controlled format string in a formatted output operation.",
+    "category": "Memory Safety",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-502": {
+    "name": "Deserialization of Untrusted Data",
+    "description": "Deserializing untrusted data without ensuring that the resulting data is safe.",
+    "category": "Deserialization",
+    "severity_guidance": "Context dependent"
+  },
+  "CWE-787": {
+    "name": "Out-of-bounds Write",
+    "description": "Writing data outside the bounds of an allocated memory buffer.",
+    "category": "Memory Safety",
+    "severity_guidance": "Context dependent"
+  }
+}
