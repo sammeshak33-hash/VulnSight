@@ -24,19 +24,6 @@ class CommandInjectionVisitor(ast.NodeVisitor):
         self.findings = []
         self.taint = TaintAnalyzer()
 
-    @staticmethod
-    def get_function_name(node):
-        """Convert a function expression into a dotted name."""
-
-        if isinstance(node, ast.Name):
-            return node.id
-
-        if isinstance(node, ast.Attribute):
-            parent = CommandInjectionVisitor.get_function_name(node.value)
-            return f"{parent}.{node.attr}" if parent else node.attr
-
-        return ""
-
     def get_command_argument(self, node):
         """Retrieve only the command argument of a sink."""
 
@@ -62,8 +49,21 @@ class CommandInjectionVisitor(ast.NodeVisitor):
 
         return False
 
+    def is_shadowed_sink(self, function_node):
+        """Check whether a sink name has been reassigned."""
+
+        current = function_node
+
+        while isinstance(current, ast.Attribute):
+            current = current.value
+
+        return isinstance(current, ast.Name) and current.id in self.taint.shadowed_names
+
     def detect_sink(self, node):
-        """Check whether a call is a command injection candidate."""
+        """Check whether a call is a command execution candidate."""
+
+        if self.is_shadowed_sink(node.func):
+            return None
 
         function_name = self.taint.resolve_name(node.func)
 
@@ -104,39 +104,109 @@ class CommandInjectionVisitor(ast.NodeVisitor):
         self.taint.visit_import_from(node)
 
     def visit_Assign(self, node):
-        """Track normal variable assignments."""
+        """Track normal assignments."""
 
-        self.generic_visit(node.value)
-
+        self.visit(node.value)
         tainted = self.taint.is_tainted(node.value)
 
         for target in node.targets:
             self.taint.mark_target(target, tainted)
 
     def visit_AnnAssign(self, node):
-        """Track annotated variable assignments."""
+        """Track annotated assignments."""
 
         if node.value is not None:
-            self.generic_visit(node.value)
-
+            self.visit(node.value)
             self.taint.mark_target(
                 node.target,
                 self.taint.is_tainted(node.value),
             )
 
     def visit_AugAssign(self, node):
-        """Track augmented assignments such as command += input()."""
+        """Track augmented assignments."""
 
         previous_taint = self.taint.is_tainted(node.target)
 
-        self.generic_visit(node.value)
-
+        self.visit(node.value)
         new_taint = previous_taint or self.taint.is_tainted(node.value)
 
         self.taint.mark_target(node.target, new_taint)
 
+    def visit_NamedExpr(self, node):
+        """Track assignment expressions."""
+
+        self.visit(node.value)
+        self.taint.mark_target(
+            node.target,
+            self.taint.is_tainted(node.value),
+        )
+
+    def visit_If(self, node):
+        """Analyze both branches and merge their possible taint states."""
+
+        self.visit(node.test)
+
+        initial_state = self.taint.clone()
+
+        self.taint = initial_state.clone()
+        for statement in node.body:
+            self.visit(statement)
+        body_state = self.taint
+
+        self.taint = initial_state.clone()
+
+        for statement in node.orelse:
+            self.visit(statement)
+
+        else_state = self.taint
+
+        self.taint = TaintAnalyzer.merge([body_state, else_state])
+
+    def visit_FunctionDef(self, node):
+        """Analyze a function using an isolated local taint state."""
+
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+
+        for default in node.args.defaults:
+            self.visit(default)
+
+        for default in node.args.kw_defaults:
+            if default is not None:
+                self.visit(default)
+
+        parent_state = self.taint
+        self.taint = parent_state.clone()
+
+        for statement in node.body:
+            self.visit(statement)
+
+        self.taint = parent_state
+
+    def visit_AsyncFunctionDef(self, node):
+        """Analyze async functions using isolated local state."""
+
+        self.visit_FunctionDef(node)
+
+    def visit_ClassDef(self, node):
+        """Analyze a class body without leaking its assignments outward."""
+
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+
+        for base in node.bases:
+            self.visit(base)
+
+        parent_state = self.taint
+        self.taint = parent_state.clone()
+
+        for statement in node.body:
+            self.visit(statement)
+
+        self.taint = parent_state
+
     def visit_Call(self, node):
-        """Detect command execution sinks."""
+        """Detect command execution calls."""
 
         sink = self.detect_sink(node)
 

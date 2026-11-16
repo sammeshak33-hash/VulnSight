@@ -232,3 +232,96 @@ os.system(input())
     assert finding.source == "Untrusted input"
     assert finding.sink == "os.system"
     assert finding.to_dict()["cwe"] == "CWE-78"
+
+
+def test_taint_does_not_leak_between_functions():
+    source = """
+import os
+
+def first_function():
+    command = input("Enter command: ")
+
+def second_function():
+    command = "dir"
+    os.system(command)
+"""
+
+    findings = scan_source(source)
+
+    assert findings == []
+
+
+def test_detects_command_injection_inside_function():
+    source = """
+import os
+
+def execute_command():
+    command = input("Enter command: ")
+    os.system(command)
+"""
+
+    findings = scan_source(source)
+
+    assert len(findings) == 1
+    assert findings[0].cwe == "CWE-78"
+
+
+def test_taint_is_preserved_when_one_branch_is_unsafe():
+    source = """
+import os
+
+if condition:
+    command = input("Enter command: ")
+else:
+    command = "dir"
+
+os.system(command)
+"""
+
+    findings = scan_source(source)
+
+    assert len(findings) == 1
+
+
+def test_taint_is_not_added_when_both_branches_are_safe():
+    source = """
+import os
+
+if condition:
+    command = "dir"
+else:
+    command = "echo hello"
+
+os.system(command)
+"""
+
+    findings = scan_source(source)
+
+    assert findings == []
+
+
+def test_local_module_reassignment_does_not_use_old_import():
+    source = """
+import os
+
+def execute():
+    os = object()
+    os.system(input("Enter command: "))
+"""
+
+    findings = scan_source(source)
+
+    assert findings == []
+
+
+def test_reassigned_imported_function_is_not_detected_as_sink():
+    source = """
+from os import system as execute
+
+execute = print
+execute(input("Enter command: "))
+"""
+
+    findings = scan_source(source)
+
+    assert findings == []
