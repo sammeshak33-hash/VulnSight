@@ -8,7 +8,6 @@ from vulnsight.scanner.taint_model import SourceKind
 class TaintPolicy:
     sources: tuple[SourceSpec, ...]
     sanitizers: tuple[SanitizerSpec, ...]
-    pass_through: frozenset[str]
 
 
 def create_default_policy():
@@ -37,13 +36,11 @@ def create_default_policy():
             names=frozenset({"os.getenv"}),
             kind=SourceKind.ENVIRONMENT,
             origin_id="os.getenv",
-            max_confidence="low",
         ),
         SourceSpec(
             roots=frozenset({"os.environ"}),
             kind=SourceKind.ENVIRONMENT,
             origin_id="os.environ",
-            max_confidence="low",
         ),
     )
 
@@ -62,18 +59,7 @@ def create_default_policy():
         ),
     )
 
-    pass_through = frozenset(
-        {
-            "str",
-            "repr",
-            "format",
-            "join",
-            "os.path.join",
-        }
-    )
-
     return TaintPolicy(
         sources=sources,
         sanitizers=sanitizers,
-        pass_through=pass_through,
     )

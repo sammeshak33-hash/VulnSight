@@ -23,7 +23,6 @@ class SourceSpec:
     roots: frozenset[str] = frozenset()
     kind: SourceKind = SourceKind.INTERACTIVE
     origin_id: str = ""
-    max_confidence: str = "medium"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +47,6 @@ class SinkSpec:
     rule_id: str
     cwe: str
     names: frozenset[str] = frozenset()
-    method_names: frozenset[str] = frozenset()
     selector: ArgSelector = field(default_factory=ArgSelector)
     guard: Guard | None = None
 
