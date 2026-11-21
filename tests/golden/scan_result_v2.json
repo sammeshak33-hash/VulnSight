@@ -1,0 +1,222 @@
+{
+  "findings": [
+    {
+      "confidence": "low",
+      "cwe": "CWE-798",
+      "enclosing_function": "<module>",
+      "evidence": [],
+      "evidence_signature": null,
+      "finding_id": "642476a00e95e445a2f224e64d70813e-0",
+      "fingerprint": "642476a00e95e445a2f224e64d70813e",
+      "language": "python",
+      "location": {
+        "column": 0,
+        "end_column": 28,
+        "end_line": 3,
+        "file": "app/config.py",
+        "line": 3
+      },
+      "message": "Hard-coded credential",
+      "occurrence": 0,
+      "rule_id": "PY-SECRET-001",
+      "severity": null,
+      "sink": null,
+      "structure_hash": null,
+      "taint_effect": null,
+      "verification": null
+    },
+    {
+      "confidence": "medium",
+      "cwe": "CWE-78",
+      "enclosing_function": "execute",
+      "evidence": [
+        {
+          "neutralizations": [],
+          "origin": {
+            "col": 14,
+            "kind": "interactive",
+            "line": 10,
+            "origin_id": "input()"
+          },
+          "trace": [
+            {
+              "col": 14,
+              "kind": "source",
+              "line": 10,
+              "text": "input()"
+            },
+            {
+              "col": 0,
+              "kind": "assign",
+              "line": 11,
+              "text": "step 1"
+            }
+          ]
+        }
+      ],
+      "evidence_signature": "8118cb3d021d14badbf9df48a424d00e",
+      "finding_id": "4decba69c4fb5a4d41f44647e8a45f24-0",
+      "fingerprint": "4decba69c4fb5a4d41f44647e8a45f24",
+      "language": "python",
+      "location": {
+        "column": 4,
+        "end_column": 30,
+        "end_line": 12,
+        "file": "app/run.py",
+        "line": 12
+      },
+      "message": "Potential command injection",
+      "occurrence": 0,
+      "rule_id": "PY-CMD-001",
+      "severity": null,
+      "sink": {
+        "callee": "os.system",
+        "certainty": "definite"
+      },
+      "structure_hash": null,
+      "taint_effect": "raw",
+      "verification": null
+    },
+    {
+      "confidence": "medium",
+      "cwe": "CWE-78",
+      "enclosing_function": "execute",
+      "evidence": [
+        {
+          "neutralizations": [
+            {
+              "cwe": "CWE-78",
+              "platforms": [
+                "posix"
+              ],
+              "via": "shlex.quote"
+            }
+          ],
+          "origin": {
+            "col": 8,
+            "kind": "cli_arg",
+            "line": 4,
+            "origin_id": "sys.argv"
+          },
+          "trace": [
+            {
+              "col": 8,
+              "kind": "source",
+              "line": 4,
+              "text": "sys.argv"
+            },
+            {
+              "col": 0,
+              "kind": "concat",
+              "line": 5,
+              "text": "step 1"
+            },
+            {
+              "col": 0,
+              "kind": "partial_sanitizer",
+              "line": 6,
+              "text": "step 2"
+            }
+          ]
+        }
+      ],
+      "evidence_signature": "dc145a58695b1294ea23435fb3df3e44",
+      "finding_id": "4decba69c4fb5a4d41f44647e8a45f24-1",
+      "fingerprint": "4decba69c4fb5a4d41f44647e8a45f24",
+      "language": "python",
+      "location": {
+        "column": 4,
+        "end_column": 31,
+        "end_line": 20,
+        "file": "app/run.py",
+        "line": 20
+      },
+      "message": "Potential command injection (caf\u00e9)",
+      "occurrence": 1,
+      "rule_id": "PY-CMD-001",
+      "severity": null,
+      "sink": {
+        "callee": "os.system",
+        "certainty": "definite"
+      },
+      "structure_hash": "0123456789abcdef0123456789abcdef",
+      "taint_effect": "partial",
+      "verification": null
+    },
+    {
+      "confidence": "medium",
+      "cwe": "CWE-120",
+      "enclosing_function": "copy_name",
+      "evidence": [],
+      "evidence_signature": null,
+      "finding_id": "ab73b562d168d2aa61b9837b6ef041e5-0",
+      "fingerprint": "ab73b562d168d2aa61b9837b6ef041e5",
+      "language": "c",
+      "location": {
+        "column": 4,
+        "end_column": null,
+        "end_line": null,
+        "file": "native/copy.c",
+        "line": 7
+      },
+      "message": "Unbounded copy into fixed buffer",
+      "occurrence": 0,
+      "rule_id": "C-BUF-001",
+      "severity": {
+        "assumptions": [
+          "local attacker"
+        ],
+        "level": "high",
+        "method": "example",
+        "score": 8.1,
+        "vector": null
+      },
+      "sink": {
+        "callee": "strcpy",
+        "certainty": "possible"
+      },
+      "structure_hash": null,
+      "taint_effect": null,
+      "verification": {
+        "model_id": "example-model",
+        "score": 0.75,
+        "verdict": "kept"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "code": "skipped-file",
+      "file": "assets/logo.png",
+      "level": "warning",
+      "line": null,
+      "message": "Binary file skipped"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-01-01T00:00:00Z",
+    "files_scanned": 3,
+    "settings": {
+      "parameter_mode": "strict"
+    },
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "2.0",
+  "status": "complete",
+  "summary": {
+    "by_cwe": {
+      "CWE-120": 1,
+      "CWE-78": 2,
+      "CWE-798": 1
+    },
+    "by_rule": {
+      "C-BUF-001": 1,
+      "PY-CMD-001": 2,
+      "PY-SECRET-001": 1
+    },
+    "errors": 0,
+    "findings": 4,
+    "warnings": 1
+  },
+  "target": "src"
+}

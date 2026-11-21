@@ -25,7 +25,8 @@ Can a machine-learning verification layer reduce the false-positive alerts of st
 |---|---|
 | Core models, CWE catalog, rule registry | Done (M0, M0.1) |
 | Python taint-analysis engine (`TaintVisitor`) | Done (M0.2) |
-| Scanner integration, `Finding` v2, CLI | Next (M1) |
+| `Finding` v2 and `ScanResult` models, JSON format | Implemented and locally validated; pending review/merge. See [docs/finding-schema.md](docs/finding-schema.md) |
+| Scanner integration (detector migration), CLI | Next (M1.2 to M1.4) |
 | Evaluation, datasets, ML verification | Planned (M2 to M5) |
 | C/C++, severity, explanations, fix verification | Planned (M6 to M8) |
 

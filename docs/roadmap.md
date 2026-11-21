@@ -1,6 +1,6 @@
 # VulnSight Roadmap
 
-Status: M0, M0.1 and M0.2 complete (99 tests, Ruff clean). Next module: M1.1.
+Status: M0, M0.1 and M0.2 complete. M1.1 implemented and locally validated; pending review/merge. M1.2 starts after M1.1 is merged.
 
 ## Workflow
 
@@ -37,7 +37,7 @@ Total: 36 modules. Tiers: A = research floor (19), B = research claims (+5), C =
 Format: ID, name, complexity, tier, dependencies, key outputs.
 
 ### M1 Integration
-- **M1.1 Finding v2 and ScanResult**. Low, A. After M0.2. `models.py`, `docs/finding-schema.md`. Fingerprint has three parts (see Design notes).
+- **M1.1 Finding v2 and ScanResult**. Low, A. After M0.2. `findings.py`, `scan_result.py`, `codec.py`, `docs/finding-schema.md`. Fingerprint has three parts (see Design notes).
 - **M1.2 Detector migration**. Medium, A. After M1.1. CWE-78 runs on `TaintVisitor`; `taint.py` deleted; differential tests.
 - **M1.3 Parameter modes**. Low, A. After M1.2. `ParameterMode`, `SourceKind.PARAMETER`, parameter binding only.
 - **M1.4 ScanEngine and CLI**. Medium, A. After M1.2, M1.3. `engine.py`, `cli.py`, `vulnsight scan`.
@@ -115,8 +115,8 @@ Biggest schedule risk: M3.1 (dataset size, dump format, Python share). Biggest r
 
 A finding carries three identifiers, because no single one survives both renames and moves:
 
-1. `fingerprint`: hash of rule, CWE, canonical sink callee and enclosing qualname. Line-insensitive. Used for deduplication inside one scan.
-2. `evidence_signature`: rule, sink callee, ordered origin ids, and the sequence of trace kinds. Contains no file, line or function name.
+1. `fingerprint`: hash of rule, CWE, canonical sink callee and enclosing qualname. Line-insensitive. Cross-scan grouping key. `finding_id` (fingerprint plus occurrence) is the scan-local unique id.
+2. `evidence_signature`: rule, sink callee, and for each taint origin its id and trace-kind sequence, with origins in canonical order (sorted by origin id, then trace-kind sequence) so the signature does not depend on file position. Contains no file, line or function name. `None` when there is no taint evidence.
 3. `structure_hash`: hash of the enclosing function's AST with local names renamed canonically (callee names, attribute names and constant shapes are kept).
 
 `verify-fix` matches a before-finding to the after-version in tiers: exact fingerprint, then the same `structure_hash` or a high AST-shingle similarity (renamed function), then a unique `evidence_signature` within the changed files (moved code). An ambiguous match gives INCONCLUSIVE, never a guess. When a finding disappears, the verdict separates "sink removed" from "sink sanitized". Fix-pair patch hunks are used as extra evidence where available. M8.3 tests rename, move and reorder mutations.
