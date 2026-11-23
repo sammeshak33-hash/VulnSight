@@ -63,6 +63,30 @@ For example, externally supplied input passed into a function parameter may not 
 
 Configurable entry-point policies and interprocedural analysis are future improvements.
 
+## Method-call receivers
+
+A method call returns tainted data when its receiver is tainted and the method is one that returns text derived from the receiver. For example, `x.strip()` is tainted when `x` is tainted, and `os.environ.get("X")` is tainted because `os.environ` is a source.
+
+These methods propagate the receiver's taint:
+
+- `strip`, `lstrip`, `rstrip`, `lower`, `upper`, `casefold`, `title`, `capitalize`, `swapcase`
+- `replace`, `format`, `format_map`, `join`, `split`, `rsplit`, `splitlines`, `partition`, `rpartition`
+- `expandtabs`, `center`, `ljust`, `rjust`, `zfill`, `translate`, `removeprefix`, `removesuffix`
+- `encode`, `decode`
+
+The analysis knows a method's name, not the type of its receiver. Two rules limit the damage when a user-defined class reuses a standard name:
+
+- **Classes in the scanned file.** If a class in the same file defines a method with one of these names (for example `def strip(self)`), that name propagates only from a receiver that is the source value itself, such as `input().strip()` or `x = input(); x.strip()`. A value that has passed through a call, such as `Config(input()).strip()`, is not propagated, because it may be an instance of that class.
+- **`get` and `copy`.** These propagate only from a source that the policy declares as a container (`SourceSpec(container=True)`), from an alias of it, or from a `copy()` of it. The default policy declares `os.environ` and `sys.argv`. A source kind such as `NETWORK` or `FRAMEWORK` does not say whether the value is a mapping or a scalar, so the engine does not guess: framework or network sources that are mappings (for example a request object) must be declared. A container that has passed through any other call, including `Config(os.environ).get(...)`, is not propagated.
+
+Limitations of this approach:
+
+- A class that is imported, defined in another file, or inherited from an imported base class is indistinguishable from the built-in type. `Config(input()).strip()` is still reported when `Config` comes from another module. Classes in the scanned file are recognised by their `def` and assignment names in the class body only.
+- When a class in the file defines a method with a listed name, chained calls on a derived value stop at that name (for example `input().strip().lower()` when the file defines `lower`).
+- `dict(os.environ).get("X")` and `json.loads(input()).get("x")` are not propagated, because the value is no longer the source container.
+
+Other methods do not propagate the receiver's taint. This includes predicates and counters such as `startswith`, `isdigit`, `count` and `find`, methods that read files (`read`, `readline`), `items`, `keys` and `values`, and every user-defined method. Arguments still propagate as before, and sanitizers keep their effect when a receiver method is involved.
+
 ## Initial sanitizers
 
 - `int()`
@@ -107,7 +131,7 @@ The current engine does not fully model:
 
 - Interprocedural data flow and function-call argument propagation.
 - External entry-point parameter tainting.
-- Complete attribute and container tracking.
+- Complete attribute and container tracking. Reading an attribute of a tainted value (`x.attr`) is not treated as tainted, and `get()` on a container that is not the source itself (for example `json.loads(input()).get("x")`) is not propagated.
 - All Python import and dynamic execution patterns.
 - Every framework-specific input source.
 - All custom sanitizers and security contexts.

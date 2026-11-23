@@ -16,6 +16,84 @@ from vulnsight.scanner.taint_model import (
     TraceStep,
 )
 
+# Methods whose result is text derived from the receiver (for example
+# ``value.strip()``). When the receiver is tainted, the result is tainted.
+# Predicates and counters (``startswith``, ``isdigit``, ``count``...) and
+# unknown or user-defined methods are deliberately not listed.
+PROPAGATING_METHODS = frozenset(
+    {
+        "strip",
+        "lstrip",
+        "rstrip",
+        "lower",
+        "upper",
+        "casefold",
+        "title",
+        "capitalize",
+        "swapcase",
+        "replace",
+        "format",
+        "format_map",
+        "join",
+        "split",
+        "rsplit",
+        "splitlines",
+        "partition",
+        "rpartition",
+        "expandtabs",
+        "center",
+        "ljust",
+        "rjust",
+        "zfill",
+        "translate",
+        "removeprefix",
+        "removesuffix",
+        "encode",
+        "decode",
+    }
+)
+
+# ``get`` and ``copy`` propagate taint only from a receiver that is a source
+# container itself: a source the policy declares with ``container=True``
+# (``os.environ`` and ``sys.argv`` by default), an alias of one, or a ``copy()``
+# of one. See ``_receiver_taint``.
+CONTAINER_METHODS = frozenset({"get", "copy"})
+
+# A taint label whose trace holds only these steps is the source value itself:
+# it has not passed through a call, an operator or a loop, so it cannot be an
+# object built by a user-defined class.
+SOURCE_IDENTITY_STEPS = frozenset(
+    {
+        TraceKind.SOURCE,
+        TraceKind.ASSIGN,
+        TraceKind.ALIAS,
+    }
+)
+
+
+def _user_defined_method_names(tree):
+    """Collect method and attribute names defined by classes in this module."""
+
+    names = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    names.add(item.name)
+                elif isinstance(item, ast.Assign):
+                    names.update(
+                        target.id
+                        for target in item.targets
+                        if isinstance(target, ast.Name)
+                    )
+                elif isinstance(item, ast.AnnAssign) and isinstance(
+                    item.target, ast.Name
+                ):
+                    names.add(item.target.id)
+
+    return frozenset(names)
+
 
 @dataclass(frozen=True, slots=True)
 class SinkHit:
@@ -172,6 +250,13 @@ class TaintVisitor(ast.NodeVisitor):
         self._global_names = set()
         self._nonlocal_names = set()
         self._closure_scope: ScopeState | None = None
+        self._user_method_names = frozenset()
+
+        declared = {item.origin_id for item in self.policy.sources if item.container}
+        undeclared = {
+            item.origin_id for item in self.policy.sources if not item.container
+        }
+        self._container_origin_ids = frozenset(declared - undeclared)
 
     # ---------------------------------------------------------
     # Scope and binding helpers
@@ -365,6 +450,8 @@ class TaintVisitor(ast.NodeVisitor):
         child._closure_scope = deferred.closure_scope.copy()
 
         # Findings are collected centrally.
+        child._user_method_names = self._user_method_names
+
         child.sink_hits = self.sink_hits
         child._hit_keys = self._hit_keys
 
@@ -539,6 +626,51 @@ class TaintVisitor(ast.NodeVisitor):
 
         return result
 
+    @staticmethod
+    def _is_source_identity(label):
+        return all(step.kind in SOURCE_IDENTITY_STEPS for step in label.trace)
+
+    def _receiver_taint(self, method, receiver):
+        """Return the taint a method call inherits from its receiver.
+
+        The second value is True when the call returns a copy of a source
+        container, which stays a source container.
+
+        Only the method name is known, not the receiver's type. ``get`` and
+        ``copy`` therefore need a source the policy declares as a container. A
+        name that a class in this module also defines (``def strip(self)``)
+        propagates only from a receiver that is the source value itself. An
+        imported or third-party class with a standard method name cannot be
+        told apart from the built-in type.
+        """
+
+        if method in CONTAINER_METHODS:
+            labels = tuple(
+                label
+                for label in receiver.labels
+                if label.origin.origin_id in self._container_origin_ids
+                and self._is_source_identity(label)
+            )
+
+            return TaintValue(labels), method == "copy" and bool(labels)
+
+        if method in PROPAGATING_METHODS:
+            if method not in self._user_method_names:
+                return receiver, False
+
+            return (
+                TaintValue(
+                    tuple(
+                        label
+                        for label in receiver.labels
+                        if self._is_source_identity(label)
+                    )
+                ),
+                False,
+            )
+
+        return TaintValue.clean(), False
+
     def evaluate(self, node):
         """Evaluate expression taint using an iterative AST traversal."""
 
@@ -616,6 +748,15 @@ class TaintVisitor(ast.NodeVisitor):
                         values[id(keyword.value)] for keyword in current.keywords
                     )
 
+                    container_copy = False
+
+                    if isinstance(current.func, ast.Attribute):
+                        receiver_taint, container_copy = self._receiver_taint(
+                            current.func.attr,
+                            values[id(current.func.value)],
+                        )
+                        argument_values.append(receiver_taint)
+
                     result = self._join(argument_values)
 
                     sanitizer = None
@@ -628,6 +769,11 @@ class TaintVisitor(ast.NodeVisitor):
                             result,
                             sanitizer,
                             current,
+                        )
+
+                    elif container_copy:
+                        result = result.with_step(
+                            self._step(current, TraceKind.ALIAS, "copy")
                         )
 
                     elif result:
@@ -1174,6 +1320,8 @@ class TaintVisitor(ast.NodeVisitor):
 
         if not isinstance(tree, ast.Module):
             raise TypeError("TaintVisitor.analyze expects an ast.Module")
+
+        self._user_method_names = _user_defined_method_names(tree)
 
         self.visit_block(tree.body)
 
