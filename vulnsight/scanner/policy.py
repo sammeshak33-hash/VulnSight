@@ -31,6 +31,7 @@ def create_default_policy():
             roots=frozenset({"sys.argv"}),
             kind=SourceKind.CLI_ARG,
             origin_id="sys.argv",
+            container=True,
         ),
         SourceSpec(
             names=frozenset({"os.getenv"}),
@@ -41,6 +42,7 @@ def create_default_policy():
             roots=frozenset({"os.environ"}),
             kind=SourceKind.ENVIRONMENT,
             origin_id="os.environ",
+            container=True,
         ),
     )
 

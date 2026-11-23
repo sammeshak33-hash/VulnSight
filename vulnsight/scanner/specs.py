@@ -23,6 +23,14 @@ class SourceSpec:
     roots: frozenset[str] = frozenset()
     kind: SourceKind = SourceKind.INTERACTIVE
     origin_id: str = ""
+    # True only when the source value is a mapping or sequence (os.environ,
+    # sys.argv, a request object). The engine does not infer this: a source
+    # not declared as a container never propagates through get() or copy().
+    container: bool = False
+
+    def __post_init__(self):
+        if self.container and not self.origin_id:
+            raise ValueError("A container source needs an origin_id")
 
 
 @dataclass(frozen=True, slots=True)
