@@ -25,12 +25,14 @@ Can a machine-learning verification layer reduce the false-positive alerts of st
 |---|---|
 | Core models, CWE catalog, rule registry | Done (M0, M0.1) |
 | Python taint-analysis engine (`TaintVisitor`) | Done (M0.2) |
-| `Finding` v2 and `ScanResult` models, JSON format | Implemented and locally validated; pending review/merge. See [docs/finding-schema.md](docs/finding-schema.md) |
-| Scanner integration (detector migration), CLI | Next (M1.2 to M1.4) |
+| `Finding` v2 and `ScanResult` models, JSON format | Done (M1.1). See [docs/finding-schema.md](docs/finding-schema.md) |
+| Taint propagation through method-call receivers | Done (PR #4) |
+| CWE-78 detector on the taint engine (detector migration) | Implemented and locally validated; pending review/merge (M1.2) |
+| Parameter modes, scan engine, CLI | Next (M1.3 and M1.4) |
 | Evaluation, datasets, ML verification | Planned (M2 to M5) |
 | C/C++, severity, explanations, fix verification | Planned (M6 to M8) |
 
-There is no command-line tool yet. The current library entry points are `vulnsight.scanner.visitor.analyze_source` and `vulnsight.scanner.command_injection.scan_source`.
+There is no command-line tool yet. The current library entry points are `vulnsight.scanner.visitor.analyze_source` (the taint engine) and `vulnsight.scanner.command_injection.scan_source`, which returns a list of `Finding` v2 objects (`vulnsight.Finding`).
 
 The full plan is in [docs/roadmap.md](docs/roadmap.md). How the taint engine works is described in [docs/taint-analysis.md](docs/taint-analysis.md).
 

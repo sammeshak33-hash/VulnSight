@@ -1,7 +1,8 @@
 """Check that Finding v2 fits the real output of the M0.2 taint engine.
 
-The conversion helper below exists only in these tests. Migrating the
-detector to the new engine (and writing the real adapter) is M1.2.
+The conversion helper below exists only in these tests. The real adapter is
+``vulnsight.scanner.adapter`` (M1.2); these tests keep checking the raw engine
+output against the model without depending on it.
 """
 
 import textwrap
@@ -173,16 +174,17 @@ def test_equal_origins_from_two_arguments_still_round_trip():
 # ---------------------------------------------------------------
 
 
-def test_the_current_detector_still_produces_legacy_findings():
+def test_the_detector_now_produces_finding_v2():
     findings = scan_source('import os\nos.system(input("x"))\n')
 
     assert len(findings) == 1
-    assert type(findings[0]) is vulnsight.models.Finding
-    assert not isinstance(findings[0], Finding)
+    assert type(findings[0]) is Finding
+    assert not isinstance(findings[0], vulnsight.models.Finding)
 
 
-def test_package_root_still_exports_the_legacy_finding():
-    assert vulnsight.Finding is vulnsight.models.Finding
+def test_package_root_exports_finding_v2():
+    assert vulnsight.Finding is Finding
+    assert vulnsight.Finding is not vulnsight.models.Finding
 
 
 def test_legacy_finding_is_unchanged():
@@ -200,27 +202,24 @@ def test_legacy_finding_is_unchanged():
     assert legacy.confidence == "medium"
 
 
-def test_v2_answers_the_same_legacy_keys_as_the_detector_output():
-    old = scan_source('import os\nos.system(input("x"))\n')[0]
-    hits = analyze_source(
-        'import os\nos.system(input("x"))\n',
-        sink_specs=(
-            SinkSpec(
-                rule_id="PY-CMD-001",
-                cwe="CWE-78",
-                names=frozenset({"os.system"}),
-                selector=ArgSelector(positions=(0,), keywords=()),
-            ),
-        ),
-    )
-    new = finding_from_hit(hits[0])
+def test_v2_answers_the_legacy_keys_with_the_values_the_old_detector_gave():
+    # Values recorded from the legacy detector for this input before it was
+    # replaced. ``source`` is the one deliberate difference: v1 stored the
+    # constant label "Untrusted input", v2 reports the real origin ids.
+    legacy_values = {
+        "function": "os.system",
+        "line": 2,
+        "cwe": "CWE-78",
+        "severity": "Review required",
+        "rule_id": "PY-CMD-001",
+        "confidence": "medium",
+        "sink": "os.system",
+    }
+    new = scan_source('import os\nos.system(input("x"))\n')[0]
 
-    for key in ("function", "line", "cwe", "severity", "rule_id", "confidence", "sink"):
-        assert new[key] == old[key], key
+    for key, value in legacy_values.items():
+        assert new[key] == value, key
 
-    # `source` is the one deliberate difference: v1 stored a constant label,
-    # v2 reports the real origin ids.
-    assert old["source"] == "Untrusted input"
     assert new["source"] == "input()"
 
 

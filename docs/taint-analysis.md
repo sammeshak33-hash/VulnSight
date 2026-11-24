@@ -37,6 +37,7 @@ For example:
 ```python
 import os
 
+
 def execute(command):
     os.system(command)
 ```
@@ -47,6 +48,7 @@ However, explicit sources inside a function remain detectable:
 
 ```python
 import os
+
 
 def execute():
     command = input()
@@ -109,6 +111,61 @@ Sanitizer recognition is heuristic and context dependent. A recognized sanitizer
 
 Subprocess sinks are considered by this rule only when `shell=True` is explicitly provided.
 
+### The `shell` rule
+
+The rule `PY-CMD-001` (CWE-78) runs on `TaintVisitor` through `vulnsight/scanner/command_injection.py`. The `shell` argument of a subprocess call is read as follows:
+
+| Call | Result | Reported |
+|---|---|---|
+| `shell=True` (the literal) | applies | yes |
+| no `shell` argument | does not apply | no |
+| any other constant (`False`, `None`, `0`, `1`) | does not apply | no |
+| `shell=<variable or expression>`, or `**options` without an explicit `shell` | unknown | no (see below) |
+
+The legacy detector never reported calls whose `shell` value it could not read. The constant `REPORT_UNKNOWN_SHELL` in `command_injection.py` keeps them suppressed. Setting it to `True` reports them.
+
+Only the command argument counts: the first positional argument, or one of the keywords `args`, `command` and `cmd`. Tainted `cwd` or `env` values do not make a finding.
+
+### Sanitized values
+
+The engine reports a sink whenever tainted data reaches it, including data that a sanitizer neutralized. `vulnsight/scanner/adapter.py` turns each hit into a finding and judges the taint against the platforms `posix` and `windows`:
+
+| Taint effect | Example | Finding |
+|---|---|---|
+| raw | `os.system(input())` | reported, confidence medium |
+| partial | `os.system(shlex.quote(input()))` | reported, confidence low |
+| neutralized | `os.system(str(int(input())))` | not reported |
+
+`shlex.quote()` quotes for POSIX shells only. It is not safe escaping for Windows `cmd.exe`, so a flow that is sanitized only by `shlex.quote()` is reported as partially neutralized, with low confidence, and the finding message says so.
+
+### Enclosing function names
+
+Each finding records the scope that runs the sink call, using the engine's own naming:
+
+- Module level is `<module>`.
+- A function or class adds its name to its enclosing scope's name, joined with `.`: `f`, `Class.method`, `outer.inner`, `f.Class.method`.
+- A lambda is `<lambda@LINE>` and does not take its parent's prefix.
+- A statement in a class body gets the class name.
+- A decorator, default value, annotation, base class or class keyword runs in the scope that contains the definition.
+
+### Differences from the legacy detector
+
+The legacy detector had its own taint tracking (`scanner/taint.py`, now removed). The fixed corpus in `tests/differential_corpus.py` records its verdicts on 66 snippets and compares them with the new detector. They agree on 62. The four differences are intentional:
+
+| Case | Legacy | Now | Why |
+|---|---|---|---|
+| A parameter named like an imported module (`def f(os): os.system(...)`) | reported | not reported | Improvement: the parameter shadows the import. |
+| Taint assigned in a `try` body | not reported | reported | Improvement: the engine analyzes `try`, `except` and `finally`. |
+| `match` statement capturing tainted input | not reported | reported | Improvement: the engine binds `match` captures. |
+| `shlex.quote(input())` | not reported | reported, partial, low confidence | Decision: `shlex.quote` is POSIX-specific. |
+
+Other behaviour changes of the migration:
+
+- `scan_source` returns Finding v2 objects. `finding.source` and a string-valued `finding.sink` no longer exist as attributes; use `finding["source"]` (origin ids), `finding["sink"]` (callee) or `finding.sink.callee`.
+- Findings are returned in canonical order (file, line, column, rule), not in visit order.
+- A finding records the column and end position of the call, and the taint evidence.
+- `CommandInjectionVisitor` no longer exists.
+
 ## Analysis capabilities
 
 The M0.2 engine includes:
@@ -138,6 +195,6 @@ The current engine does not fully model:
 
 ## Reporting
 
-Findings represent potential vulnerabilities and require manual review.
+Findings represent potential vulnerabilities and require manual review. They use the Finding v2 model described in [finding-schema.md](finding-schema.md).
 
 The scanner does not prove exploitability or guarantee that a program is secure.

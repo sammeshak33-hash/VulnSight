@@ -1,3 +1,3 @@
-from vulnsight.models import Finding
+from vulnsight.findings import Finding
 
 __all__ = ["Finding"]

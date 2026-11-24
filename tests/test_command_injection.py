@@ -229,8 +229,10 @@ os.system(input())
 
     assert finding.rule_id == "PY-CMD-001"
     assert finding.confidence == "medium"
-    assert finding.source == "Untrusted input"
-    assert finding.sink == "os.system"
+    # Finding v2: the sink is an object, and the source is the engine's real
+    # origin (legacy v1 stored the constant label "Untrusted input").
+    assert finding.sink.callee == "os.system"
+    assert [label.origin.origin_id for label in finding.evidence] == ["input()"]
     assert finding.to_dict()["cwe"] == "CWE-78"
 
 
