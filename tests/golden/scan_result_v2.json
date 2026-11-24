@@ -201,7 +201,7 @@
     },
     "tool_version": "0.1.0"
   },
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "status": "complete",
   "summary": {
     "by_cwe": {

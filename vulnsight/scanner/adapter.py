@@ -24,7 +24,7 @@ from vulnsight.findings import (
     Sink,
     assign_occurrences,
 )
-from vulnsight.scanner.taint_model import TaintEffect, TaintValue
+from vulnsight.scanner.taint_model import SourceKind, TaintEffect, TaintValue
 
 # Platforms a finding is judged against. A sanitizer must cover all of them to
 # neutralize a flow completely, so ``shlex.quote`` (POSIX only) leaves a
@@ -39,6 +39,33 @@ EFFECT_STRENGTH = {
     TaintEffect.RAW: 0,
     TaintEffect.PARTIAL: 1,
 }
+
+
+# Confidence from lowest to highest, used to cap a confidence value.
+CONFIDENCE_ORDER = (
+    ConfidenceLevel.LOW,
+    ConfidenceLevel.MEDIUM,
+    ConfidenceLevel.HIGH,
+)
+
+
+def cap_confidence(confidence, ceiling):
+    """Return the lower of two confidence levels."""
+
+    return min(confidence, ceiling, key=CONFIDENCE_ORDER.index)
+
+
+def parameter_only(labels):
+    """Check that all evidence comes from function parameters.
+
+    Parameter taint is a guess about who calls the function, so a finding that
+    rests only on it is capped at low confidence. One genuine source in the
+    evidence (``input()``, ``sys.argv`` and so on) keeps normal confidence.
+    """
+
+    return bool(labels) and all(
+        label.origin.kind == SourceKind.PARAMETER for label in labels
+    )
 
 
 def build_parent_map(tree):
@@ -138,6 +165,9 @@ def findings_from_hits(
 
     * the strongest effect wins (``RAW`` over ``PARTIAL``), and it decides the
       confidence and the message;
+    * if the hits with that strongest effect rest only on parameter taint
+      (recall mode), the confidence is capped at ``LOW``; one genuine source
+      among them keeps the effect-based confidence;
     * the evidence is the union of the labels of all reportable hits;
     * the sink comes from the first hit with the strongest effect.
 
@@ -160,8 +190,20 @@ def findings_from_hits(
 
     for group in reportable.values():
         effect = min((item[1] for item in group), key=EFFECT_STRENGTH.get)
-        hit = next(item[0] for item in group if item[1] == effect)
+        winners = [item[0] for item in group if item[1] == effect]
+        hit = winners[0]
         node = hit.node
+        confidence = ConfidenceLevel(confidence_by_effect[effect])
+        winner_labels = [
+            label
+            for member in winners
+            for taint in member.argument_taints
+            for label in taint.labels
+        ]
+
+        if parameter_only(winner_labels):
+            confidence = cap_confidence(confidence, ConfidenceLevel.LOW)
+
         labels = []
 
         for member, _ in group:
@@ -183,7 +225,7 @@ def findings_from_hits(
                     node.end_lineno,
                     node.end_col_offset,
                 ),
-                confidence=ConfidenceLevel(confidence_by_effect[effect]),
+                confidence=confidence,
                 enclosing_function=enclosing_function_name(node, parents),
                 sink=Sink(hit.callee, hit.certainty),
                 evidence=tuple(labels),

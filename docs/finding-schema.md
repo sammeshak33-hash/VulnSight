@@ -99,7 +99,7 @@ Entries are sorted by origin id, then by trace-kind sequence, and duplicates are
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `"2.0"` (a property, always the current version) |
+| `schema_version` | `"2.1"` (a property, always the current version) |
 | `target` | Scan target path, or `None` for in-memory source |
 | `status` | `complete`, `partial` or `failed` |
 | `findings` | Canonical order (file, line, column, rule, id). `finding_id` values must be unique |
@@ -129,7 +129,7 @@ Reading is strict:
 
 ## Schema versioning
 
-`SCHEMA_VERSION` is `"2.0"`, and `SUPPORTED_SCHEMA_VERSIONS` lists exactly the versions this code can read. Anything else is rejected with a message naming the supported versions. The format is `MAJOR.MINOR`.
+`SCHEMA_VERSION` is `"2.1"`, and `SUPPORTED_SCHEMA_VERSIONS` lists exactly the versions this code can read. Anything else is rejected with a message naming the supported versions. The format is `MAJOR.MINOR`.
 
 Because the reader is strict, every change to the serialized format is visible to older readers. Version changes are therefore **decided, not automatic**. Each change that touches the JSON format is assessed with these questions and the outcome is recorded in the changelog below:
 
@@ -150,8 +150,9 @@ A test (`test_serialized_enum_values_are_pinned`) pins every serialized enum. Ad
 | Version | Change |
 |---|---|
 | 2.0 | Initial schema (M1.1). |
+| 2.1 | M1.3: new `SourceKind` value `parameter`, the origin kind of a function parameter in recall parameter mode. Additive; no key, hash or meaning changed. 2.0 documents are still readable. |
 
-Planned and not yet decided: M1.3 is expected to add a `SourceKind` member for parameter origins that only appears in the opt-in recall mode. The decision (bump or conditional no-bump) will be assessed and recorded in that module.
+**Decision for 2.1.** The value is produced only in the opt-in recall parameter mode, so the "no bump, documented" rule would have allowed it. The project chose a minor bump anyway, because a document that contains `parameter` is rejected by every 2.0 reader and the version number now says so. The new reader lists `2.0` and `2.1` in `SUPPORTED_SCHEMA_VERSIONS` and writes `2.1`. The 2.1 reader enforces the contract: a document labelled `2.0` that contains `parameter` evidence is rejected with a `SchemaError` (a `ValueError`) naming the path of the first offending evidence item, because no 2.0 writer could have produced it. A `2.0` document without it, and any `2.1` document, are read normally.
 
 ## Compatibility decisions
 
@@ -162,4 +163,4 @@ Planned and not yet decided: M1.3 is expected to add a `SourceKind` member for p
 
 ## Not in M1.1
 
-The scan engine, the command-line tool, parameter-mode behavior, computing `structure_hash`, severity calculation, ML verification and explanations are later modules.
+The scan engine, the command-line tool, recording the parameter mode in `ScanMetadata.settings`, computing `structure_hash`, severity calculation, ML verification and explanations are later modules.

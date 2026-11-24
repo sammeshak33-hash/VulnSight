@@ -62,7 +62,7 @@ def test_empty_scan_result_is_valid():
 def test_schema_version_is_exposed_and_supported():
     result = ScanResult(status=ScanStatus.COMPLETE)
 
-    assert result.schema_version == SCHEMA_VERSION == "2.0"
+    assert result.schema_version == SCHEMA_VERSION == "2.1"
     assert SCHEMA_VERSION in SUPPORTED_SCHEMA_VERSIONS
 
 

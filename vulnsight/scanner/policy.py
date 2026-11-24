@@ -1,16 +1,38 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from vulnsight.scanner.specs import SanitizerSpec, SourceSpec
 from vulnsight.scanner.taint_model import SourceKind
+
+
+class ParameterMode(str, Enum):
+    """How function parameters are treated as taint sources.
+
+    ``STRICT`` (the default): parameters are clean. Only declared sources
+    (``input()``, ``sys.argv`` and so on) start taint.
+
+    ``RECALL`` (experimental): the parameters of module-level functions and
+    class methods are tainted with ``SourceKind.PARAMETER``. This finds more
+    candidates, with many more false positives, so findings that rest only on
+    parameter taint get low confidence. It exists to feed the ML verifier.
+    """
+
+    STRICT = "strict"
+    RECALL = "recall"
 
 
 @dataclass(frozen=True, slots=True)
 class TaintPolicy:
     sources: tuple[SourceSpec, ...]
     sanitizers: tuple[SanitizerSpec, ...]
+    parameter_mode: ParameterMode = ParameterMode.STRICT
+
+    def __post_init__(self):
+        if not isinstance(self.parameter_mode, ParameterMode):
+            raise ValueError("parameter_mode must be a ParameterMode")
 
 
-def create_default_policy():
+def create_default_policy(parameter_mode=ParameterMode.STRICT):
     sources = (
         SourceSpec(
             names=frozenset({"input", "builtins.input"}),
@@ -64,4 +86,5 @@ def create_default_policy():
     return TaintPolicy(
         sources=sources,
         sanitizers=sanitizers,
+        parameter_mode=parameter_mode,
     )
