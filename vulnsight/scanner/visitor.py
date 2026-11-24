@@ -1,7 +1,11 @@
 import ast
 from dataclasses import dataclass, field, replace
 
-from vulnsight.scanner.policy import TaintPolicy, create_default_policy
+from vulnsight.scanner.policy import (
+    ParameterMode,
+    TaintPolicy,
+    create_default_policy,
+)
 from vulnsight.scanner.scope import (
     BindingKind,
     ResolutionCertainty,
@@ -10,6 +14,7 @@ from vulnsight.scanner.scope import (
 from vulnsight.scanner.specs import GuardDecision, GuardResult, SinkSpec
 from vulnsight.scanner.taint_model import (
     Neutralization,
+    SourceKind,
     TaintOrigin,
     TaintValue,
     TraceKind,
@@ -252,6 +257,10 @@ class TaintVisitor(ast.NodeVisitor):
         self._closure_scope: ScopeState | None = None
         self._user_method_names = frozenset()
 
+        # Set by the parent for each analyzed function. True only in recall
+        # mode, for a module-level function or a class method.
+        self._taint_parameters = False
+
         declared = {item.origin_id for item in self.policy.sources if item.container}
         undeclared = {
             item.origin_id for item in self.policy.sources if not item.container
@@ -451,11 +460,68 @@ class TaintVisitor(ast.NodeVisitor):
 
         # Findings are collected centrally.
         child._user_method_names = self._user_method_names
+        child._taint_parameters = self._parameters_are_sources(deferred)
 
         child.sink_hits = self.sink_hits
         child._hit_keys = self._hit_keys
 
         child._analyze_function_body(node)
+
+    def _parameters_are_sources(self, deferred):
+        """Decide whether a function's parameters start taint (recall mode).
+
+        Only module-level functions and class methods qualify. Functions
+        nested in functions, lambdas, and classes defined inside functions do
+        not: ``closure_kind`` is the kind of scope the definition sits in,
+        and only ``module`` and ``class`` are public entry points.
+        """
+
+        if self.policy.parameter_mode != ParameterMode.RECALL:
+            return False
+
+        return deferred.scope_kind in {"function", "method"} and (
+            deferred.closure_kind in {"module", "class"}
+        )
+
+    def _source_parameters(self, node):
+        """Return the parameter nodes that are taint sources in this function.
+
+        Positional-only, regular and keyword-only parameters qualify.
+        ``*args`` and ``**kwargs`` do not. In a method the first positional
+        parameter is the receiver (``self`` or ``cls``) and is skipped, except
+        in a ``@staticmethod``, where it is a normal parameter.
+        """
+
+        if not self._taint_parameters:
+            return ()
+
+        arguments = node.args
+        positional = list(arguments.posonlyargs) + list(arguments.args)
+
+        if self.scope_kind == "method" and not self._is_static_method(node):
+            positional = positional[1:]
+
+        return tuple(positional) + tuple(arguments.kwonlyargs)
+
+    @staticmethod
+    def _is_static_method(node):
+        return any(
+            isinstance(decorator, ast.Name) and decorator.id == "staticmethod"
+            for decorator in node.decorator_list
+        )
+
+    def _parameter_taint(self, argument, tainted_parameters):
+        if not any(argument is item for item in tainted_parameters):
+            return TaintValue.clean()
+
+        return TaintValue.from_origin(
+            TaintOrigin(
+                origin_id=f"param:{self._function_qualname}.{argument.arg}",
+                kind=SourceKind.PARAMETER,
+                line=argument.lineno,
+                col=argument.col_offset,
+            )
+        )
 
     def _analyze_function_body(self, node):
         arguments = node.args
@@ -484,11 +550,13 @@ class TaintVisitor(ast.NodeVisitor):
         for name in local_names:
             self.scope.bind_name(name)
 
+        tainted_parameters = self._source_parameters(node)
+
         for argument in parameters:
             self._bind_name(
                 argument.arg,
                 kind=BindingKind.PARAM,
-                taint=TaintValue.clean(),
+                taint=self._parameter_taint(argument, tainted_parameters),
             )
 
         if isinstance(node, ast.Lambda):

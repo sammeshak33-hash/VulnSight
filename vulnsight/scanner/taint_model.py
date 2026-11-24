@@ -12,6 +12,8 @@ class SourceKind(str, Enum):
     FRAMEWORK = "framework"
     FILE = "file"
     NETWORK = "network"
+    # A function parameter. Produced only in recall parameter mode.
+    PARAMETER = "parameter"
 
 
 class TraceKind(str, Enum):

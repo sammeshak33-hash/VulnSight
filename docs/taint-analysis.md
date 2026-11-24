@@ -28,11 +28,18 @@ The current source policy recognizes:
 
 ## Function parameters
 
-Function parameters are **clean by default**.
+How parameters are treated depends on the **parameter mode**, a field of `TaintPolicy`:
 
-A parameter is not automatically considered untrusted simply because it receives a value from outside the function.
+```python
+from vulnsight.scanner.policy import ParameterMode, create_default_policy
 
-For example:
+strict = create_default_policy()  # the default
+recall = create_default_policy(ParameterMode.RECALL)  # experimental
+```
+
+### Strict mode (default)
+
+Function parameters are **clean**. A parameter is not considered untrusted just because it receives a value from outside the function.
 
 ```python
 import os
@@ -42,9 +49,7 @@ def execute(command):
     os.system(command)
 ```
 
-This code does not produce a finding solely because `command` is a function parameter.
-
-However, explicit sources inside a function remain detectable:
+This code produces no finding in strict mode. Explicit sources inside a function remain detectable:
 
 ```python
 import os
@@ -57,13 +62,35 @@ def execute():
 
 This produces a potential command-injection finding.
 
-### Limitation
+### Recall mode (experimental)
 
-The current engine does not fully track untrusted values passed between function calls.
+Recall mode exists to produce high-recall candidates for the ML verifier. It finds more, with many more false positives. A parameter becomes a taint source of kind `SourceKind.PARAMETER`, with the origin id `param:<qualified function name>.<parameter name>` (for example `param:execute.command` or `param:Handler.run.cmd`) and the position of the parameter.
 
-For example, externally supplied input passed into a function parameter may not be detected if the parameter itself is the only taint origin.
+Which parameters are sources:
 
-Configurable entry-point policies and interprocedural analysis are future improvements.
+| Parameter | In recall mode |
+|---|---|
+| Positional-only, regular and keyword-only parameters of a module-level function | Source |
+| The same in a class method, including a method of a class nested in a class | Source |
+| Functions with a leading underscore (`_helper`) and dunder methods | Source (private functions are included) |
+| `self` of a normal method, `cls` of a class method | Clean (the receiver) |
+| The first parameter of a `@staticmethod` | Source (a static method has no receiver) |
+| `*args` and `**kwargs` | Clean |
+| A function defined inside another function or method | Clean |
+| A lambda | Clean |
+| A method of a class defined inside a function | Clean |
+
+The receiver is the first positional parameter of a method, whatever its name. A static method is recognized by a plain `@staticmethod` decorator. A parameter keeps normal engine behavior after it is bound: reassigning it to a clean value clears it, `int()` and `shlex.quote` neutralize it as before, and `get()` and `copy()` do not propagate from it because a parameter is not a declared container. A nested function can still see the taint of an enclosing function's parameter through its closure.
+
+**Confidence.** A finding whose winning evidence comes only from parameters is capped at **low** confidence. If a genuine source (`input()`, `sys.argv`, `os.environ` and so on) is part of the winning evidence, the finding keeps its normal effect-based confidence. "Winning evidence" means the hits with the strongest effect for that call, so M1.2 deduplication is unchanged.
+
+**Serialization.** `parameter` is a `SourceKind` value and appears in finding evidence only in recall mode. It was added with schema 2.1; see [finding-schema.md](finding-schema.md). Recording the mode in `ScanMetadata.settings["parameter_mode"]` is the job of the scan engine (M1.4).
+
+### Limitations
+
+- Strict mode does not track values passed between function calls, so externally supplied input passed into a parameter is not detected there. Interprocedural analysis and configurable entry points (M4.3) are future work.
+- Recall mode treats every eligible parameter as untrusted, whether or not anything untrusted ever reaches it.
+- `*args`, `**kwargs`, annotations such as `x: int`, and aliased decorators such as `staticmethod` imported under another name are not considered.
 
 ## Method-call receivers
 

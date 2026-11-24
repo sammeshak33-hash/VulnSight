@@ -25,12 +25,17 @@ from vulnsight.findings import (
     require_optional_integer,
     require_text,
 )
+from vulnsight.scanner.taint_model import SourceKind
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
 
 # Versions this code can read. A change here is a deliberate, documented
 # decision: see "Schema versioning" in docs/finding-schema.md.
-SUPPORTED_SCHEMA_VERSIONS = frozenset({SCHEMA_VERSION})
+SUPPORTED_SCHEMA_VERSIONS = frozenset({"2.0", SCHEMA_VERSION})
+
+# SourceKind values that schema 2.1 added. A document labelled 2.0 cannot
+# contain them: no 2.0 writer could have produced one.
+_SOURCE_KINDS_ADDED_IN_2_1 = frozenset({SourceKind.PARAMETER})
 
 _TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z")
 
@@ -336,9 +341,24 @@ class ScanResult:
                 "scan_result.summary: does not match the findings and issues"
             )
 
+        if version == "2.0":
+            cls._reject_kinds_newer_than_2_0(result)
+
         reader.finish()
 
         return result
+
+    @staticmethod
+    def _reject_kinds_newer_than_2_0(result: "ScanResult") -> None:
+        for finding_index, finding in enumerate(result.findings):
+            for label_index, label in enumerate(finding.evidence):
+                if label.origin.kind in _SOURCE_KINDS_ADDED_IN_2_1:
+                    raise SchemaError(
+                        f"scan_result.findings[{finding_index}].evidence"
+                        f"[{label_index}].origin.kind: "
+                        f"{label.origin.kind.value!r} needs schema_version "
+                        f"'2.1' or later, but the document says '2.0'"
+                    )
 
     @classmethod
     def from_json(cls, text: str) -> "ScanResult":

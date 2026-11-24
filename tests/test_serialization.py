@@ -262,6 +262,7 @@ PINNED_ENUM_VALUES = {
         "framework",
         "file",
         "network",
+        "parameter",
     },
     TraceKind: {
         "source",
@@ -371,7 +372,7 @@ def test_derived_identifiers_are_emitted():
     finding = data["findings"][1]
 
     assert set(("fingerprint", "evidence_signature", "finding_id")) <= set(finding)
-    assert data["schema_version"] == "2.0"
+    assert data["schema_version"] == "2.1"
     assert data["summary"]["findings"] == 4
 
 
@@ -421,7 +422,7 @@ def test_schema_error_is_a_value_error():
 
 
 def test_unsupported_schema_versions_are_rejected():
-    for version in ("1.0", "2.1", "3.0", "", "2"):
+    for version in ("1.0", "2.2", "3.0", "", "2"):
         data = golden_data()
         data["schema_version"] = version
 
@@ -826,7 +827,7 @@ def test_duplicate_top_level_key_is_rejected():
 @pytest.mark.parametrize(
     "anchor, duplicate, key",
     [
-        ('"schema_version": "2.0",', ' "schema_version": "2.0",', "schema_version"),
+        ('"schema_version": "2.1",', ' "schema_version": "2.1",', "schema_version"),
         ('"line": 12', ', "line": 99', "line"),
         ('"origin_id": "input()"', ', "origin_id": "other()"', "origin_id"),
         ('"callee": "os.system"', ', "callee": "os.popen"', "callee"),
