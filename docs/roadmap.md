@@ -1,6 +1,6 @@
 # VulnSight Roadmap
 
-Status: M0, M0.1 and M0.2 complete. M1.1 implemented and locally validated; pending review/merge. M1.2 starts after M1.1 is merged.
+Status: M0, M0.1, M0.2 and M1.1 complete. PR #4 (taint propagation through method receivers, an approved engine exception) is merged. M1.2 implemented and locally validated; pending review/merge. M1.3 starts after M1.2 is merged.
 
 ## Workflow
 
@@ -11,7 +11,7 @@ Status: M0, M0.1 and M0.2 complete. M1.1 implemented and locally validated; pend
 ## Project decisions
 
 - Parameter taint mode: `strict` is the default. `recall` is experimental, for high-recall candidate generation for the ML verifier.
-- The taint engine is frozen except for the changes approved in M1.3 and M4.3, and for evidence-triggered modules X1 to X3.
+- The taint engine is frozen except for the changes approved in M1.3 and M4.3, and for evidence-triggered modules X1 to X3. One further exception was approved and is merged: PR #4 fixed taint propagation through method-call receivers. It changed `visitor.py` (receiver propagation), and added the `SourceSpec.container` declaration in `specs.py` and `policy.py` so that `get()` and `copy()` propagate only from declared container sources.
 - The research core has priority. Features outside it are cut first.
 - Primary Python dataset: CVEfixes (v1.0.8 on Zenodo, a SQL dump). Fallback: GitHub Advisory / OSV with fix commits. Availability, dump format, licence and Python share are verified in M3.1 before the choice is final.
 - Hardware: local NVIDIA RTX 4050 Laptop GPU, with Colab or Kaggle as backup.

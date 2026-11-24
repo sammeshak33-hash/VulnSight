@@ -1,7 +1,24 @@
+"""OS command injection (CWE-78) detector built on the taint engine.
+
+The detector is a thin layer over ``TaintVisitor``: it declares the sinks, adds
+the ``shell=True`` rule for ``subprocess``, and turns the engine's sink hits
+into Finding v2 objects through ``vulnsight.scanner.adapter``.
+"""
+
 import ast
 
-from vulnsight.models import Finding
-from vulnsight.scanner.taint import TaintAnalyzer
+from vulnsight.findings import ConfidenceLevel
+from vulnsight.scanner.adapter import findings_from_hits
+from vulnsight.scanner.specs import (
+    GuardDecision,
+    GuardResult,
+    SinkSpec,
+)
+from vulnsight.scanner.taint_model import TaintEffect
+from vulnsight.scanner.visitor import TaintVisitor
+
+RULE_ID = "PY-CMD-001"
+CWE = "CWE-78"
 
 OS_SINKS = {
     "os.system",
@@ -16,221 +33,129 @@ SUBPROCESS_SINKS = {
     "subprocess.check_output",
 }
 
+# A subprocess call whose ``shell`` value cannot be read from the source (a
+# variable, an expression or ``**options``) gets the guard result UNKNOWN. The
+# legacy detector never reported those calls, so M1.2 keeps them suppressed.
+# Setting this to True reports them instead.
+REPORT_UNKNOWN_SHELL = False
 
-class CommandInjectionVisitor(ast.NodeVisitor):
-    """Find command execution calls receiving potentially tainted data."""
+CONFIDENCE_BY_EFFECT = {
+    TaintEffect.RAW: ConfidenceLevel.MEDIUM,
+    # ``shlex.quote`` quotes for POSIX shells only. It is not safe escaping for
+    # Windows ``cmd.exe``, so a quoted value is still reported, with low
+    # confidence.
+    TaintEffect.PARTIAL: ConfidenceLevel.LOW,
+}
 
-    def __init__(self):
-        self.findings = []
-        self.taint = TaintAnalyzer()
+PARTIAL_NOTE = (
+    "sanitizer does not cover every platform; shlex.quote is POSIX-specific "
+    "and is not safe Windows command escaping"
+)
 
-    def get_command_argument(self, node):
-        """Retrieve only the command argument of a sink."""
 
-        if node.args:
-            return node.args[0]
+def shell_guard(node):
+    """Decide whether a subprocess call runs its command through a shell.
 
-        for keyword in node.keywords:
-            if keyword.arg in {"args", "command", "cmd"}:
-                return keyword.value
+    * ``shell=True`` (the literal) applies.
+    * No ``shell`` argument, or any other constant (``False``, ``None``, ``1``),
+      does not apply. Only the literal ``True`` counts.
+    * A ``shell`` value that is not a constant, or ``**options`` without an
+      explicit ``shell``, is unknown.
+    """
 
-        return None
+    has_unpacked_options = False
 
-    @staticmethod
-    def uses_shell(node):
-        """Check whether a subprocess call explicitly enables shell mode."""
+    for keyword in node.keywords:
+        if keyword.arg is None:
+            has_unpacked_options = True
+        elif keyword.arg == "shell":
+            if isinstance(keyword.value, ast.Constant):
+                if keyword.value.value is True:
+                    return GuardDecision(GuardResult.APPLIES)
 
-        for keyword in node.keywords:
-            if keyword.arg == "shell":
-                return (
-                    isinstance(keyword.value, ast.Constant)
-                    and keyword.value.value is True
+                return GuardDecision(
+                    GuardResult.NOT_APPLICABLE,
+                    "shell is not the literal True",
                 )
 
-        return False
-
-    def is_shadowed_sink(self, function_node):
-        """Check whether a sink name has been reassigned."""
-
-        current = function_node
-
-        while isinstance(current, ast.Attribute):
-            current = current.value
-
-        return isinstance(current, ast.Name) and current.id in self.taint.shadowed_names
-
-    def detect_sink(self, node):
-        """Check whether a call is a command execution candidate."""
-
-        if self.is_shadowed_sink(node.func):
-            return None
-
-        function_name = self.taint.resolve_name(node.func)
-
-        if function_name in OS_SINKS:
-            return function_name, self.get_command_argument(node)
-
-        if function_name in SUBPROCESS_SINKS:
-            if not self.uses_shell(node):
-                return None
-
-            return function_name, self.get_command_argument(node)
-
-        return None
-
-    def add_finding(self, node, function_name):
-        """Create a standardized vulnerability finding."""
-
-        self.findings.append(
-            Finding(
-                function=function_name,
-                line=node.lineno,
-                cwe="CWE-78",
-                severity="Review required",
-                message=(
-                    f"Potential command injection: tainted data reaches {function_name}"
-                ),
-                rule_id="PY-CMD-001",
-                confidence="medium",
-                source="Untrusted input",
-                sink=function_name,
-            )
-        )
-
-    def visit_Import(self, node):
-        self.taint.visit_import(node)
-
-    def visit_ImportFrom(self, node):
-        self.taint.visit_import_from(node)
-
-    def visit_Assign(self, node):
-        """Track normal assignments."""
-
-        self.visit(node.value)
-        tainted = self.taint.is_tainted(node.value)
-
-        for target in node.targets:
-            self.taint.mark_target(target, tainted)
-
-    def visit_AnnAssign(self, node):
-        """Track annotated assignments."""
-
-        if node.value is not None:
-            self.visit(node.value)
-            self.taint.mark_target(
-                node.target,
-                self.taint.is_tainted(node.value),
+            return GuardDecision(
+                GuardResult.UNKNOWN,
+                "shell value is not a constant",
             )
 
-    def visit_AugAssign(self, node):
-        """Track augmented assignments."""
-
-        previous_taint = self.taint.is_tainted(node.target)
-
-        self.visit(node.value)
-        new_taint = previous_taint or self.taint.is_tainted(node.value)
-
-        self.taint.mark_target(node.target, new_taint)
-
-    def visit_NamedExpr(self, node):
-        """Track assignment expressions."""
-
-        self.visit(node.value)
-        self.taint.mark_target(
-            node.target,
-            self.taint.is_tainted(node.value),
+    if has_unpacked_options:
+        return GuardDecision(
+            GuardResult.UNKNOWN,
+            "shell may be set through **options",
         )
 
-    def visit_If(self, node):
-        """Analyze both branches and merge their possible taint states."""
+    return GuardDecision(
+        GuardResult.NOT_APPLICABLE,
+        "shell is not set",
+    )
 
-        self.visit(node.test)
 
-        initial_state = self.taint.clone()
+SINK_SPECS = (
+    SinkSpec(
+        rule_id=RULE_ID,
+        cwe=CWE,
+        names=frozenset(OS_SINKS),
+    ),
+    SinkSpec(
+        rule_id=RULE_ID,
+        cwe=CWE,
+        names=frozenset(SUBPROCESS_SINKS),
+        guard=shell_guard,
+    ),
+)
 
-        self.taint = initial_state.clone()
-        for statement in node.body:
-            self.visit(statement)
-        body_state = self.taint
 
-        self.taint = initial_state.clone()
+def describe(hit, effect):
+    """Return the finding message for one sink hit."""
 
-        for statement in node.orelse:
-            self.visit(statement)
+    message = f"Potential command injection: tainted data reaches {hit.callee}"
 
-        else_state = self.taint
+    if effect == TaintEffect.PARTIAL:
+        message = f"{message} ({PARTIAL_NOTE})"
 
-        self.taint = TaintAnalyzer.merge([body_state, else_state])
+    return message
 
-    def visit_FunctionDef(self, node):
-        """Analyze a function using an isolated local taint state."""
 
-        for decorator in node.decorator_list:
-            self.visit(decorator)
+def detect(tree, *, file=None, policy=None):
+    """Find command injection in a parsed module.
 
-        for default in node.args.defaults:
-            self.visit(default)
+    ``tree`` is an ``ast.Module``. ``file`` is the path recorded on each
+    finding (``None`` for in-memory source). The result is a list of Finding v2
+    objects in canonical order.
+    """
 
-        for default in node.args.kw_defaults:
-            if default is not None:
-                self.visit(default)
+    hits = TaintVisitor(policy=policy, sink_specs=SINK_SPECS).analyze(tree)
 
-        parent_state = self.taint
-        self.taint = parent_state.clone()
+    if not REPORT_UNKNOWN_SHELL:
+        hits = tuple(hit for hit in hits if hit.guard.result != GuardResult.UNKNOWN)
 
-        for statement in node.body:
-            self.visit(statement)
-
-        self.taint = parent_state
-
-    def visit_AsyncFunctionDef(self, node):
-        """Analyze async functions using isolated local state."""
-
-        self.visit_FunctionDef(node)
-
-    def visit_ClassDef(self, node):
-        """Analyze a class body without leaking its assignments outward."""
-
-        for decorator in node.decorator_list:
-            self.visit(decorator)
-
-        for base in node.bases:
-            self.visit(base)
-
-        parent_state = self.taint
-        self.taint = parent_state.clone()
-
-        for statement in node.body:
-            self.visit(statement)
-
-        self.taint = parent_state
-
-    def visit_Call(self, node):
-        """Detect command execution calls."""
-
-        sink = self.detect_sink(node)
-
-        if sink is not None:
-            function_name, command_argument = sink
-
-            if command_argument is not None and self.taint.is_tainted(command_argument):
-                self.add_finding(node, function_name)
-
-        self.generic_visit(node)
+    return findings_from_hits(
+        hits,
+        tree,
+        describe=describe,
+        confidence_by_effect=CONFIDENCE_BY_EFFECT,
+        file=file,
+    )
 
 
 def scan_source(source_code):
-    """Scan Python source code for potential command injection."""
+    """Scan Python source code for potential command injection.
+
+    Returns a list of Finding v2 objects. Raises ``ValueError`` when the source
+    is not valid Python.
+    """
 
     try:
         tree = ast.parse(source_code)
     except SyntaxError as error:
         raise ValueError(f"Invalid Python source code: {error}") from error
 
-    visitor = CommandInjectionVisitor()
-    visitor.visit(tree)
-
-    return visitor.findings
+    return detect(tree)
 
 
 if __name__ == "__main__":

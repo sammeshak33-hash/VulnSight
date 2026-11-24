@@ -2,7 +2,7 @@
 
 This document describes the result models added in M1.1.
 
-Scope: these are data models and their JSON format. The current command-injection detector still produces the legacy `vulnsight.models.Finding`. Migrating the detector to the new engine is M1.2, and there is no scan command yet (M1.4).
+Scope: these are data models and their JSON format. The command-injection detector (`vulnsight/scanner/command_injection.py`) produces these findings since M1.2. There is no scan command yet (M1.4).
 
 | Module | Contents |
 |---|---|
@@ -155,11 +155,11 @@ Planned and not yet decided: M1.3 is expected to add a `SourceKind` member for p
 
 ## Compatibility decisions
 
-- The legacy `vulnsight.models.Finding` is unchanged. The detector and the package root still use it. v2 lives in `vulnsight.findings`, and the root export changes when the detector migrates (M1.2).
+- The legacy `vulnsight.models.Finding` is unchanged and still importable, but nothing produces it any more. v2 lives in `vulnsight.findings`. Since M1.2 the detector returns v2 findings and the package root (`vulnsight.Finding`) exports v2.
 - Finding v2 offers read-only legacy access: `finding["function"]`, `finding.get(...)` for the nine v1 keys. `function` and `sink` return the sink callee (v1's meaning) or `""` when there is no sink. `severity` returns `"Review required"` while not assessed. `source` returns the origin ids, where v1 stored a constant label. Unknown keys raise `KeyError` from `[]` (v1 raised `AttributeError`) and return the default from `get`.
 - `to_dict()` on v2 returns the new schema, not the v1 dictionary.
 - The parameter mode is a scan-wide setting and is not stored on findings.
 
 ## Not in M1.1
 
-Detector migration, the scan engine, the command-line tool, parameter-mode behavior, computing `structure_hash`, severity calculation, ML verification and explanations are later modules.
+The scan engine, the command-line tool, parameter-mode behavior, computing `structure_hash`, severity calculation, ML verification and explanations are later modules.
