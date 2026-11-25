@@ -16,6 +16,9 @@ dev = [
     "ruff>=0.11",
 ]
 
+[project.scripts]
+vulnsight = "vulnsight.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["vulnsight*"]
 

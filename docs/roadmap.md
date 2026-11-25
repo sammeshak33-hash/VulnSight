@@ -1,6 +1,6 @@
 # VulnSight Roadmap
 
-Status: M0, M0.1, M0.2, M1.1 and M1.2 are complete and merged, along with PR #4 (taint propagation through method receivers, an approved engine exception) and the strongest-effect deduplication fix (PR #5). M1.3 (parameter modes) is implemented and awaiting review. M1.4 (scan engine and CLI) has not started.
+Status: M0, M0.1, M0.2, M1.1, M1.2 and M1.3 are complete and merged, along with PR #4 (taint propagation through method receivers, an approved engine exception) and the strongest-effect deduplication fix (PR #5). M1.4 (scan engine and CLI) is implemented and awaiting review. M2 has not started.
 
 ## Workflow
 
@@ -40,7 +40,7 @@ Format: ID, name, complexity, tier, dependencies, key outputs.
 - **M1.1 Finding v2 and ScanResult**. Low, A. After M0.2. `findings.py`, `scan_result.py`, `codec.py`, `docs/finding-schema.md`. Fingerprint has three parts (see Design notes).
 - **M1.2 Detector migration**. Medium, A. After M1.1. CWE-78 runs on `TaintVisitor`; `taint.py` deleted; differential tests.
 - **M1.3 Parameter modes**. Low, A. After M1.2. `ParameterMode`, `SourceKind.PARAMETER`, parameter binding only. Scope as built: strict (default) and recall modes in `TaintPolicy`; recall taints positional-only, regular and keyword-only parameters of module-level functions and class methods (private ones included), skips the receiver of normal and class methods but not of static methods, and leaves nested functions, lambdas, classes inside functions, `*args` and `**kwargs` clean; the adapter caps parameter-only findings at low confidence; schema 2.1. Recording the mode in `ScanMetadata.settings`, the engine and the CLI are M1.4.
-- **M1.4 ScanEngine and CLI**. Medium, A. After M1.2, M1.3. `engine.py`, `cli.py`, `vulnsight scan`.
+- **M1.4 ScanEngine and CLI**. Medium, A. After M1.2, M1.3. `engine.py`, `cli.py`, `vulnsight scan`. Scope as built: `ScanEngine.scan_source` and `scan_path` return a `ScanResult` and never raise for bad input (syntax, encoding, read, traversal and analysis problems become ERROR issues, with `partial` and `failed` statuses); directory scans are recursive over `*.py` with a fixed skipped-directory list and never follow symlinks or Windows junctions (reported as warnings); `--parameter-mode strict|recall` is recorded in `ScanMetadata.settings`; text and JSON output, `--output FILE` with safe writing, exit codes 0 to 4. It calls the CWE-78 detector directly (no rule packs), and adds no verifier hook, `eval` command, extra languages, other report formats, configuration files, baselines or stdin input. The schema stays at 2.1. Details are in [scanning.md](scanning.md).
 
 ### M2 Evaluation and baselines
 - **M2.1 Evaluation core and benchmark schema**. Medium, A. After M1.1. `eval/metrics.py`, `eval/benchmark.py`.
