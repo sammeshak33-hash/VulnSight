@@ -28,12 +28,25 @@ Can a machine-learning verification layer reduce the false-positive alerts of st
 | `Finding` v2 and `ScanResult` models, JSON format | Done (M1.1). See [docs/finding-schema.md](docs/finding-schema.md) |
 | Taint propagation through method-call receivers | Done (PR #4) |
 | CWE-78 detector on the taint engine (detector migration) | Done (M1.2) |
-| Parameter modes (strict and recall) | Implemented; pending review (M1.3) |
-| Scan engine, CLI | Next (M1.4) |
+| Parameter modes (strict and recall) | Done (M1.3) |
+| Scan engine and `vulnsight scan` command | Implemented; pending review (M1.4). See [docs/scanning.md](docs/scanning.md) |
 | Evaluation, datasets, ML verification | Planned (M2 to M5) |
 | C/C++, severity, explanations, fix verification | Planned (M6 to M8) |
 
-There is no command-line tool yet. The current library entry points are `vulnsight.scanner.visitor.analyze_source` (the taint engine) and `vulnsight.scanner.command_injection.scan_source`, which returns a list of `Finding` v2 objects (`vulnsight.Finding`).
+## Usage
+
+Scan a file or a directory (after `python -m pip install -e ".[dev]"`):
+
+```powershell
+vulnsight scan path\to\project
+vulnsight scan path\to\project --format json --output report.json
+vulnsight scan path\to\project --parameter-mode recall
+python -m vulnsight scan path\to\file.py
+```
+
+`--parameter-mode strict` (the default) treats function parameters as clean. `recall` is experimental: it treats the parameters of module-level functions and class methods as untrusted and reports those findings with low confidence. Exit codes: 0 no findings, 1 findings, 2 usage error, 3 partial scan, 4 failed scan. The full command-line and engine reference is in [docs/scanning.md](docs/scanning.md).
+
+Library entry points: `vulnsight.engine.ScanEngine` (returns a `ScanResult`), `vulnsight.scanner.command_injection.scan_source` (returns a list of `Finding` v2 objects, `vulnsight.Finding`) and `vulnsight.scanner.visitor.analyze_source` (the raw taint engine).
 
 The full plan is in [docs/roadmap.md](docs/roadmap.md). How the taint engine works is described in [docs/taint-analysis.md](docs/taint-analysis.md).
 
