@@ -1,6 +1,6 @@
 # VulnSight Roadmap
 
-Status: M0, M0.1, M0.2, M1.1, M1.2 and M1.3 are complete and merged, along with PR #4 (taint propagation through method receivers, an approved engine exception) and the strongest-effect deduplication fix (PR #5). M1.4 (scan engine and CLI) is implemented and awaiting review. M2 has not started.
+Status: M0, M0.1, M0.2, M1.1, M1.2, M1.3, M1.4 and M2.1 are complete and merged, along with PR #4 (taint propagation through method receivers, an approved engine exception) and the strongest-effect deduplication fix (PR #5). M2.1a (local demonstration dashboard) is implemented and technically reviewed, pending PR. M2.2 and M2.3 have not started.
 
 ## Workflow
 
@@ -44,6 +44,7 @@ Format: ID, name, complexity, tier, dependencies, key outputs.
 
 ### M2 Evaluation and baselines
 - **M2.1 Evaluation core and benchmark schema**. Medium, A. After M1.1. `eval/metrics.py`, `eval/benchmark.py`.
+- **M2.1a Local demonstration dashboard**. Low, demonstration milestone. After M1.4 and M2.1. `vulnsight/ui/` (`python -m vulnsight.ui`), `docs/dashboard.md`. A standard-library HTTP server on `127.0.0.1` and a static HTML, CSS and JavaScript page that scan a path with the existing `ScanEngine` and show the `ScanResult` and its evidence; the download is the `ScanResult.to_json()` text plus one newline. It is a thin presentation layer: no scanner, taint-engine, `Finding` or `ScanResult` changes, no dependencies, schema stays at 2.1. It is not an evaluation dependency: M2.2, M2.3 and every later module are independent of it, and it is not counted in the 36 modules or in any tier. It shows no precision, recall, benchmark or baseline results. Details are in [dashboard.md](dashboard.md).
 - **M2.2 Micro-benchmark and `eval` command**. Medium, A. After M2.1, M1.3, M1.4. At least 60 CWE-78 cases; baseline report.
 - **M2.3 Bandit and Semgrep adapters**. Medium, A. After M2.2. Recorded-fixture tests; optional extra.
 
