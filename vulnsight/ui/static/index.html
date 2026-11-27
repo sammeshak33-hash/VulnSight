@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="vulnsight-token" content="__VULNSIGHT_TOKEN__">
+  <title>VulnSight dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>VulnSight</h1>
+      <p class="tagline">Local scan dashboard. Your code is parsed, never executed, and nothing leaves this computer.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card" aria-labelledby="scan-title">
+      <h2 id="scan-title">Scan a Python project</h2>
+      <form id="scan-form" autocomplete="off">
+        <div class="field grow">
+          <label for="path">Directory or file path on this computer</label>
+          <input id="path" name="path" type="text" spellcheck="false" placeholder="D:\projects\my-app  or  /home/me/my-app" required>
+        </div>
+        <div class="field">
+          <label for="mode">Parameter mode</label>
+          <select id="mode" name="mode">
+            <option value="strict" selected>strict (default)</option>
+            <option value="recall">recall (experimental)</option>
+          </select>
+        </div>
+        <button id="scan-button" type="submit">Scan</button>
+      </form>
+      <p id="mode-note" class="note" hidden>Recall mode is experimental. It treats function parameters as untrusted, so its findings are low confidence by design.</p>
+      <p id="busy" class="note" role="status" hidden>Scanning. A large project can take a while.</p>
+    </section>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <section id="results" hidden>
+      <section class="card" aria-labelledby="summary-title">
+        <div class="card-head">
+          <h2 id="summary-title">Summary</h2>
+          <button id="export-button" type="button" class="secondary">Download JSON</button>
+        </div>
+        <p id="status-note" class="note" hidden></p>
+        <dl id="summary" class="summary"></dl>
+      </section>
+
+      <section class="card" aria-labelledby="findings-title">
+        <h2 id="findings-title">Findings</h2>
+        <p id="truncation" class="note warn" hidden></p>
+        <p id="no-findings" class="note" hidden>No findings.</p>
+        <div class="table-wrap">
+          <table id="findings-table" hidden>
+            <thead>
+              <tr><th>CWE</th><th>Confidence</th><th>File</th><th>Line</th><th>Sink</th></tr>
+            </thead>
+            <tbody id="findings-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="detail-card" class="card" aria-labelledby="detail-title" hidden>
+        <h2 id="detail-title">Finding details</h2>
+        <div id="detail"></div>
+      </section>
+
+      <section class="card" aria-labelledby="issues-title">
+        <h2 id="issues-title">Scan errors and warnings</h2>
+        <p id="no-issues" class="note" hidden>None.</p>
+        <div class="table-wrap">
+          <table id="issues-table" hidden>
+            <thead>
+              <tr><th>Level</th><th>Code</th><th>File</th><th>Line</th><th>Message</th></tr>
+            </thead>
+            <tbody id="issues-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Severity scores and ML verification are not part of this version, so severity is shown as "Not assessed" and ML verification as "Not run".</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

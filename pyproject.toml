@@ -36,3 +36,4 @@ select = ["E", "F", "I", "B"]
 
 [tool.setuptools.package-data]
 "vulnsight.cwe" = ["catalog.json"]
+"vulnsight.ui" = ["static/*"]

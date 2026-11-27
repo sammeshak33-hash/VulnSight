@@ -29,8 +29,11 @@ Can a machine-learning verification layer reduce the false-positive alerts of st
 | Taint propagation through method-call receivers | Done (PR #4) |
 | CWE-78 detector on the taint engine (detector migration) | Done (M1.2) |
 | Parameter modes (strict and recall) | Done (M1.3) |
-| Scan engine and `vulnsight scan` command | Implemented; pending review (M1.4). See [docs/scanning.md](docs/scanning.md) |
-| Evaluation, datasets, ML verification | Planned (M2 to M5) |
+| Scan engine and `vulnsight scan` command | Done (M1.4). See [docs/scanning.md](docs/scanning.md) |
+| Evaluation foundation (benchmark models, matching, precision, recall and F1) | Done (M2.1). See [docs/evaluation.md](docs/evaluation.md) |
+| Local demonstration dashboard | Implemented; review complete, pending PR (M2.1a). A demonstration of the existing scanner, not an evaluation dependency. See [docs/dashboard.md](docs/dashboard.md) |
+| Benchmark dataset, evaluation command, Bandit and Semgrep baselines | Planned (M2.2, M2.3) |
+| Datasets, ML verification | Planned (M3 to M5) |
 | C/C++, severity, explanations, fix verification | Planned (M6 to M8) |
 
 ## Usage
@@ -45,6 +48,17 @@ python -m vulnsight scan path\to\file.py
 ```
 
 `--parameter-mode strict` (the default) treats function parameters as clean. `recall` is experimental: it treats the parameters of module-level functions and class methods as untrusted and reports those findings with low confidence. Exit codes: 0 no findings, 1 findings, 2 usage error, 3 partial scan, 4 failed scan. The full command-line and engine reference is in [docs/scanning.md](docs/scanning.md).
+
+### Local dashboard (M2.1a)
+
+A small browser dashboard shows a scan of a directory or file on your own computer. It uses the same `ScanEngine` as the command line, adds no dependencies and listens on `127.0.0.1` only:
+
+```powershell
+python -m vulnsight.ui
+python -m vulnsight.ui --port 9000 --no-browser
+```
+
+Open the printed address, enter a path, choose the parameter mode and click **Scan**. **Download JSON** saves exactly what `vulnsight scan PATH --format json` prints. The dashboard is a demonstration of the existing scanner; it shows no evaluation results. See [docs/dashboard.md](docs/dashboard.md).
 
 Library entry points: `vulnsight.engine.ScanEngine` (returns a `ScanResult`), `vulnsight.scanner.command_injection.scan_source` (returns a list of `Finding` v2 objects, `vulnsight.Finding`) and `vulnsight.scanner.visitor.analyze_source` (the raw taint engine).
 
